@@ -1,5 +1,6 @@
 import os
 import logging
+from urllib.parse import quote
 
 import discord
 import requests
@@ -60,7 +61,7 @@ def fetch_market_data(item_name):
         "x-nxopen-api-key": API_KEY,
     }
     params = {
-        "item_name": item_name,
+        "item_name": quote(item_name),
     }
 
     try:
@@ -133,7 +134,7 @@ async def before():
 async def on_ready():
     if not price_check.is_running():
         price_check.start()
-    print(f"{bot.user} 으로 로그인 성공, 가격 모니터링 시작!")
+    logging.info(f"{bot.user} 으로 로그인 성공, 가격 모니터링 시작!")
 
 
 @bot.command(name="추가")
