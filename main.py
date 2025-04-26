@@ -61,7 +61,7 @@ def fetch_market_data(item_name):
         "x-nxopen-api-key": API_KEY,
     }
     params = {
-        "keyword": quote(item_name, safe="-"),
+        "keyword": item_name,
     }
 
     try:
