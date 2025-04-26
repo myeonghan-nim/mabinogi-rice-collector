@@ -1,6 +1,5 @@
 import os
 import logging
-from urllib.parse import quote
 
 import discord
 import requests
@@ -26,7 +25,7 @@ API_KEY = os.getenv("MABINOGI_API_KEY")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID")
 CHECK_INTERVAL = 1  # 초 단위; 예: 1초마다 체크
-API_ENDPOINT = "https://open.api.nexon.com/mabinogi/v1/auction/list"
+API_ENDPOINT = "https://open.api.nexon.com/mabinogi/v1/auction/keyword-search"
 
 # 로깅 설정
 logging.basicConfig(
@@ -61,7 +60,7 @@ def fetch_market_data(item_name):
         "x-nxopen-api-key": API_KEY,
     }
     params = {
-        "item_name": quote(item_name, safe="", encoding="utf-8"),
+        "item_name": item_name,
     }
 
     try:
@@ -79,6 +78,7 @@ def fetch_market_data(item_name):
         logging.error(f"아이템 {item_name} 데이터 없음")
         return None, None
     auction_item.sort(key=lambda x: x["auction_price_per_unit"])
+    auction_item = [it for it in auction_item if item_name in it.get("item_display_name")]
 
     first_item, second_item = auction_item[0], auction_item[1]
     lowest_price, next_price = first_item.get("auction_price_per_unit", 0), second_item.get("auction_price_per_unit", 0)
