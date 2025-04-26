@@ -1,5 +1,6 @@
 import os
 import logging
+from urllib.parse import quote
 
 import discord
 import requests
@@ -60,7 +61,7 @@ def fetch_market_data(item_name):
         "x-nxopen-api-key": API_KEY,
     }
     params = {
-        "item_name": item_name,
+        "keyword": quote(item_name, safe="-"),
     }
 
     try:
