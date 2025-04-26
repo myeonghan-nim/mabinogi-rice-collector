@@ -13,16 +13,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup SSH key
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
       - name: Pull & Restart service on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
             cd /home/${{ secrets.EC2_USER }}/mabinogi-rice-collector
@@ -31,5 +27,4 @@ jobs:
             pip install -r requirements.txt
 
             sudo systemctl restart mabinogi
-
             echo "▶ mabinogi.service restarted"
