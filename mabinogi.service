@@ -1,14 +1,14 @@
 [Unit]
-Description=mabinogi-rece-collector main.py service
+Description=mabinogi-rice-collector main.py service
 After=network.target
 
 [Service]
 User=ubuntu
-WorkingDirectory=/home/ubuntu/mabinogi-rece-collector
+WorkingDirectory=/home/ubuntu/mabinogi-rice-collector
 ExecStart=python3.12 main.py
 Restart=always
-StandardOutput=file:/home/ubuntu/mabinogi-rece-collector/main.log
-StandardError=file:/home/ubuntu/mabinogi-rece-collector/main.err
+StandardOutput=file:/home/ubuntu/mabinogi-rice-collector/main.log
+StandardError=file:/home/ubuntu/mabinogi-rice-collector/main.err
 
 [Install]
 WantedBy=multi-user.target
