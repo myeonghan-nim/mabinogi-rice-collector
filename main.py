@@ -1,9 +1,8 @@
 import os
 import logging
-from urllib.parse import quote
 
+import aiohttp
 import discord
-import requests
 from discord.ext import commands, tasks
 from dotenv import load_dotenv, set_key, dotenv_values
 
@@ -24,9 +23,10 @@ load_dotenv()
 
 API_KEY = os.getenv("MABINOGI_API_KEY")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID")
-CHECK_INTERVAL = 1  # 초 단위; 예: 1초마다 체크
+DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
+CHECK_INTERVAL = 1  # 초 단위; 1초마다 체크 (개발단계: 5req/s, 1000req/day 제한)
 API_ENDPOINT = "https://open.api.nexon.com/mabinogi/v1/auction/keyword-search"
+REQUEST_TIMEOUT = 10  # HTTP 요청 타임아웃 (초)
 
 # 로깅 설정
 logging.basicConfig(
@@ -40,21 +40,32 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# HTTP 세션 (연결 재사용으로 성능 향상)
+http_session = None
+
+# 아이템 캐시 (파일 I/O 감소)
+items_cache = None
+
 
 def get_items():
     """환경 변수에서 아이템 목록을 가져옵니다."""
-    vals = dotenv_values(".env")
-    raw = vals.get("MABINOGI_ITEMS", "")
-    return [i.strip() for i in raw.split(",") if i.strip()]
+    global items_cache
+    if items_cache is None:
+        vals = dotenv_values(".env")
+        raw = vals.get("MABINOGI_ITEMS", "")
+        items_cache = [i.strip() for i in raw.split(",") if i.strip()]
+    return items_cache
 
 
 def save_items(items):
     """아이템 목록을 환경 변수에 저장합니다."""
+    global items_cache
     set_key(".env", "MABINOGI_ITEMS", ",".join(items))
+    items_cache = items  # 캐시 갱신
     load_dotenv()
 
 
-def fetch_market_data(item_name):
+async def fetch_market_data(item_name):
     """Mabinogi API에서 평균 판매가와 등록 최저가를 가져옵니다."""
     headers = {
         "accept": "application/json",
@@ -65,26 +76,40 @@ def fetch_market_data(item_name):
     }
 
     try:
-        resp = requests.get(API_ENDPOINT, headers=headers, params=params)
-        if resp.status_code != 200:
-            logging.error(f"API 요청 실패: {resp.status_code} {resp.text}")
-            return None, None
-    except requests.RequestException as e:
+        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+        async with http_session.get(API_ENDPOINT, headers=headers, params=params, timeout=timeout) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                logging.error(f"API 요청 실패: {resp.status} {text}")
+                return None, None
+            data = await resp.json()
+    except aiohttp.ClientError as e:
         logging.error(f"API 요청 실패: {e}")
         return None, None
+    except Exception as e:
+        logging.error(f"예상치 못한 오류: {e}")
+        return None, None
 
-    data = resp.json()
     auction_item = data.get("auction_item", [])
     if not auction_item:
         logging.error(f"아이템 {item_name} 데이터 없음")
         return None, None
-    auction_item.sort(key=lambda x: x["auction_price_per_unit"])
-    auction_item = [it for it in auction_item if item_name in it.get("item_display_name")]
 
-    first_item, second_item = auction_item[0], auction_item[1]
-    lowest_price, next_price = first_item.get("auction_price_per_unit", 0), second_item.get("auction_price_per_unit", 0)
+    # 메모리 효율적인 처리: 정렬 후 필터링하면서 상위 2개만 추출
+    auction_item.sort(key=lambda x: x.get("auction_price_per_unit", float("inf")))
 
-    return lowest_price, next_price
+    matching_items = []
+    for item in auction_item:
+        if item_name in item.get("item_display_name", ""):
+            matching_items.append(item.get("auction_price_per_unit", 0))
+            if len(matching_items) == 2:
+                break
+
+    if len(matching_items) < 2:
+        logging.error(f"아이템 {item_name} 데이터 부족 (2개 필요, {len(matching_items)}개 발견)")
+        return None, None
+
+    return matching_items[0], matching_items[1]
 
 
 async def send_discord_alert(item_name, next_price, lowest_price):
@@ -115,7 +140,7 @@ async def price_check():
     """가격 모니터링 태스크"""
     items = get_items()
     for name in items:
-        lowest_price, next_price = fetch_market_data(name)
+        lowest_price, next_price = await fetch_market_data(name)
         if lowest_price is None or next_price is None:
             logging.warning(f"{name} 데이터 부족, 스킵")
             continue
@@ -133,9 +158,23 @@ async def before():
 
 @bot.event
 async def on_ready():
+    global http_session
+    if http_session is None:
+        # 연결 풀 설정으로 성능 향상
+        connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+        http_session = aiohttp.ClientSession(connector=connector, timeout=timeout)
     if not price_check.is_running():
         price_check.start()
     logging.info(f"{bot.user} 으로 로그인 성공, 가격 모니터링 시작!")
+
+
+async def cleanup():
+    """종료 시 리소스 정리"""
+    global http_session
+    if http_session and not http_session.closed:
+        await http_session.close()
+        logging.info("HTTP 세션 종료 완료")
 
 
 @bot.command(name="추가")
@@ -152,7 +191,7 @@ async def add_item(ctx, *, item_name: str):
 
 
 @add_item.error
-async def add_item_error(ctx, error):
+async def add_item_error(ctx, _error):
     await ctx.send("❗️ 아이템 이름을 다시 확인해주세요.")
 
 
@@ -170,7 +209,7 @@ async def remove_item(ctx, *, item_name: str):
 
 
 @remove_item.error
-async def remove_item_error(ctx, error):
+async def remove_item_error(ctx, _error):
     await ctx.send("❗️ 아이템 이름을 다시 확인해주세요.")
 
 
@@ -184,6 +223,12 @@ async def list_items(ctx):
 
 if __name__ == "__main__":
     if not all([API_KEY, DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID]):
-        logging.error("`.env` 에 MABINOGI_API_KEY, DISCORD_WEBHOOK_URL 설정 필요")
+        logging.error("`.env` 에 MABINOGI_API_KEY, DISCORD_CHANNEL_ID 설정 필요")
         exit(1)
-    bot.run(DISCORD_BOT_TOKEN)
+    try:
+        bot.run(DISCORD_BOT_TOKEN)
+    finally:
+        # 동기 컨텍스트에서 비동기 cleanup 실행
+        import asyncio
+
+        asyncio.run(cleanup())
