@@ -1,14 +1,25 @@
 [Unit]
-Description=mabinogi-rice-collector main.py service
-After=network.target
+Description=Mabinogi Rice Collector Discord Bot
+After=network.target network-online.target
+Wants=network-online.target
 
 [Service]
+Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/mabinogi-rice-collector
-ExecStart=python3.12 main.py
+
+# 가상환경 Python 사용 (모든 Ubuntu LTS 버전 호환)
+# uv 사용 시: .venv/bin/python
+# pip 사용 시: venv/bin/python
+ExecStart=/home/ubuntu/mabinogi-rice-collector/.venv/bin/python /home/ubuntu/mabinogi-rice-collector/main.py
+
+# 재시작 설정
 Restart=always
-StandardOutput=file:/home/ubuntu/mabinogi-rice-collector/main.log
-StandardError=file:/home/ubuntu/mabinogi-rice-collector/main.err
+RestartSec=10
+
+# 로그 파일 (append 모드로 로그 누적)
+StandardOutput=append:/home/ubuntu/mabinogi-rice-collector/main.log
+StandardError=append:/home/ubuntu/mabinogi-rice-collector/main.err
 
 [Install]
 WantedBy=multi-user.target
