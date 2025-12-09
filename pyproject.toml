@@ -1,2 +1,134 @@
+[project]
+name = "mabinogi-rice-collector"
+version = "1.0.0"
+description = "마비노기 경매장 아이템 가격을 실시간 모니터링하여 Discord로 알림을 보내는 봇"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "hannim" }
+]
+keywords = ["discord", "bot", "mabinogi", "auction", "price-monitor"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Topic :: Games/Entertainment",
+]
+
+# requirements.txt를 의존성 소스로 사용 (pip/uv 호환)
+dependencies = [
+    "aiohappyeyeballs==2.6.1",
+    "aiohttp==3.12.14",
+    "aiosignal==1.4.0",
+    "attrs==25.3.0",
+    "certifi==2025.1.31",
+    "charset-normalizer==3.4.1",
+    "discord.py==2.5.2",
+    "frozenlist==1.6.0",
+    "idna==3.10",
+    "multidict==6.4.3",
+    "propcache==0.3.1",
+    "python-dotenv==1.1.0",
+    "requests==2.32.4",
+    "typing_extensions==4.15.0",
+    "urllib3==2.6.0",
+    "yarl==1.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0.0",
+    "ruff>=0.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/hannim/mabinogi-rice-collector"
+Repository = "https://github.com/hannim/mabinogi-rice-collector"
+Issues = "https://github.com/hannim/mabinogi-rice-collector/issues"
+
+[build-system]
+requires = ["setuptools>=75.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ============================================================================
+# uv 설정
+# ============================================================================
+[tool.uv]
+# uv가 requirements.txt와 pyproject.toml을 모두 인식하도록 설정
+dev-dependencies = [
+    "black>=24.0.0",
+    "ruff>=0.8.0",
+]
+
+# ============================================================================
+# Black (코드 포매터)
+# ============================================================================
 [tool.black]
 line-length = 180
+target-version = ["py310", "py311", "py312", "py313"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | \.uv
+  | __pycache__
+  | build
+  | dist
+)/
+'''
+
+# ============================================================================
+# Ruff (린터 및 포매터 - Black보다 빠름)
+# ============================================================================
+[tool.ruff]
+line-length = 180
+target-version = "py310"
+
+# 린트 규칙 선택
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+
+# 무시할 규칙
+ignore = [
+    "E501",  # line-too-long (Black이 처리)
+    "B008",  # function-call-in-default-argument
+    "C901",  # complex-structure
+]
+
+# 제외할 디렉토리
+exclude = [
+    ".git",
+    ".venv",
+    ".uv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]  # unused-import
+
+# ============================================================================
+# setuptools 설정
+# ============================================================================
+[tool.setuptools]
+packages = []  # 단일 스크립트 프로젝트이므로 패키지 없음
+
+[tool.setuptools.package-data]
+"*" = ["*.txt", "*.md"]
