@@ -26,7 +26,7 @@ classifiers = [
 # requirements.txt를 의존성 소스로 사용 (pip/uv 호환)
 dependencies = [
     "aiohappyeyeballs==2.6.1",
-    "aiohttp==3.12.14",
+    "aiohttp==3.13.3",
     "aiosignal==1.4.0",
     "attrs==25.3.0",
     "certifi==2025.1.31",
