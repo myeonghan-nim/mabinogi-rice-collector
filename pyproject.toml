@@ -4,15 +4,15 @@ version = "1.0.0"
 description = "마비노기 경매장 아이템 가격을 실시간 모니터링하여 Discord로 알림을 보내는 봇"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "Apache License 2.0" }
 authors = [
-    { name = "hannim" }
+    { email = "hannim0828@gmail.com" }
 ]
 keywords = ["discord", "bot", "mabinogi", "auction", "price-monitor"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
