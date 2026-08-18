@@ -1,0 +1,15 @@
+# chore prefix → conventional commit 버전 범프 미해당 → 의존성 PR이 릴리스를 만들지 않음
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore

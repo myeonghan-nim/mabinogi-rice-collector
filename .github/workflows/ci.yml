@@ -1,0 +1,20 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-build:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Build
+        env:
+          CGO_ENABLED: "1"
+        run: go build -trimpath -ldflags "-H windowsgui -s -w -extldflags=-Wl,--subsystem,windows -X main.version=ci" -o mabinogi-rice-collector.exe .
