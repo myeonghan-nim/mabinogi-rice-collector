@@ -1,0 +1,16 @@
+{
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": ["icon.png"]
+    }
+  },
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "identity": {"name": "mabinogi-rice-collector", "version": "2.0.0.0"},
+        "execution-level": "asInvoker",
+        "dpi-awareness": "per monitor v2"
+      }
+    }
+  }
+}
