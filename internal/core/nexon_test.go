@@ -3,10 +3,12 @@ package core
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestClient(handler http.HandlerFunc) (*Client, *httptest.Server) {
@@ -67,6 +69,20 @@ func TestFetchLowestTwoUnauthorized(t *testing.T) {
 		if !errors.Is(err, ErrUnauthorized) {
 			t.Errorf("status %d: want ErrUnauthorized, got %v", code, err)
 		}
+	}
+}
+
+func TestFetchLowestTwoTimeout(t *testing.T) {
+	c, srv := newTestClient(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+	})
+	defer srv.Close()
+	c.HTTP = &http.Client{Timeout: 50 * time.Millisecond}
+
+	_, _, err := c.FetchLowestTwo(context.Background(), "x")
+	var nerr net.Error
+	if !errors.As(err, &nerr) || !nerr.Timeout() {
+		t.Errorf("want timeout error, got %v", err)
 	}
 }
 

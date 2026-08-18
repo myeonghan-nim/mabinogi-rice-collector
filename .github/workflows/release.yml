@@ -20,8 +20,10 @@ jobs:
         with:
           go-version: stable
       - run: go test ./...
-      # conventional commit(feat:/fix:/feat!:)일 때만 태그가 생기고, 태그가 없으면
-      # 아래 빌드/릴리스 단계는 전부 건너뛴다 (docs/chore 푸시는 릴리스 미발생).
+      # conventional commit(fix: → patch, feat: → minor, 본문에 "BREAKING CHANGE:" 푸터 → major)일
+      # 때만 태그가 생기고, 태그가 없으면 아래 빌드/릴리스 단계는 전부 건너뛴다
+      # (docs/chore 푸시는 릴리스 미발생). 주의: 이 액션(angular preset)은 "feat!:"의
+      # "!" 표기를 인식하지 못한다 — major 릴리스는 반드시 BREAKING CHANGE 푸터로.
       - name: Bump version and push tag
         id: tag
         uses: mathieudutour/github-tag-action@v6.2

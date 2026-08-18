@@ -26,6 +26,10 @@ const (
 	prefInterval    = "intervalSeconds"
 	defaultInterval = 60
 	maxLogLines     = 500
+
+	statusRunning = "상태: 감시 중"
+	statusStopped = "상태: 중지됨"
+	statusNoKey   = "상태: 키 없음"
 )
 
 type ui struct {
@@ -47,7 +51,7 @@ func newUI(a fyne.App) *ui {
 	u.win = a.NewWindow("마비노기 쌀 콜렉터 " + version)
 	u.items = a.Preferences().StringListWithFallback(prefItems, nil)
 
-	u.status = widget.NewLabel("상태: 중지됨")
+	u.status = widget.NewLabel(statusStopped)
 	u.toggle = widget.NewButton("감시 시작", u.toggleMonitoring)
 	settingsBtn := widget.NewButton("설정", func() { u.showSettings(false) })
 
@@ -94,6 +98,7 @@ func (u *ui) run() {
 	_, err := keyring.Get(keyringService, keyringUser)
 	switch {
 	case errors.Is(err, keyring.ErrNotFound):
+		u.status.SetText(statusNoKey)
 		u.appendLog("첫 실행입니다 — 넥슨 API 키를 입력해주세요")
 		u.showSettings(true)
 	case err != nil:
@@ -110,8 +115,12 @@ func (u *ui) setupTray() {
 	if !ok {
 		return
 	}
+	quit := fyne.NewMenuItem("종료", nil) // IsQuit — Fyne이 영어 "Quit"을 자동 추가하지 않게 한국어로 명시
+	quit.IsQuit = true
 	desk.SetSystemTrayMenu(fyne.NewMenu("마비노기 쌀 콜렉터",
 		fyne.NewMenuItem("열기", func() { u.win.Show() }),
+		fyne.NewMenuItemSeparator(),
+		quit,
 	))
 	u.win.SetCloseIntercept(func() { u.win.Hide() })
 }
@@ -130,8 +139,13 @@ func (u *ui) startMonitoring() {
 	}
 	key, err := keyring.Get(keyringService, keyringUser)
 	if err != nil {
+		u.status.SetText(statusNoKey)
 		u.appendLog("API 키가 없습니다 — 설정에서 입력해주세요")
 		u.showSettings(true)
+		return
+	}
+	if len(u.items) == 0 {
+		u.appendLog("모니터링할 아이템이 없습니다 — 아이템을 추가한 뒤 감시를 시작하세요")
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -139,7 +153,8 @@ func (u *ui) startMonitoring() {
 	mon := &core.Monitor{
 		Fetch: core.NewClient(key),
 		Items: func() []string {
-			return u.app.Preferences().StringListWithFallback(prefItems, nil)
+			// 방어 복사 — Preferences에 저장된 슬라이스는 UI 스레드와 공유된다
+			return append([]string(nil), u.app.Preferences().StringListWithFallback(prefItems, nil)...)
 		},
 		Interval: func() time.Duration {
 			return time.Duration(u.app.Preferences().IntWithFallback(prefInterval, defaultInterval)) * time.Second
@@ -154,13 +169,16 @@ func (u *ui) startMonitoring() {
 		},
 		OnAuthError: func() {
 			fyne.Do(func() {
+				if ctx.Err() != nil {
+					return // 이미 중지/재시작된 감시의 지연 콜백 — 무시
+				}
 				u.stopMonitoring()
 				u.showSettings(true)
 			})
 		},
 	}
 	go mon.Run(ctx)
-	u.status.SetText("상태: 감시 중")
+	u.status.SetText(statusRunning)
 	u.toggle.SetText("감시 중지")
 	u.appendLog("가격 감시 시작")
 }
@@ -171,7 +189,7 @@ func (u *ui) stopMonitoring() {
 	}
 	u.cancel()
 	u.cancel = nil
-	u.status.SetText("상태: 중지됨")
+	u.status.SetText(statusStopped)
 	u.toggle.SetText("감시 시작")
 	u.appendLog("가격 감시 중지")
 }
@@ -182,14 +200,17 @@ func (u *ui) addItem(name string) {
 		dialog.ShowError(err, u.win)
 		return
 	}
-	u.items = append(u.items, name)
+	// Preferences에 게시된 배열은 감시 고루틴도 읽는다 — 제자리 수정 금지, 항상 새 배열
+	items := make([]string, 0, len(u.items)+1)
+	items = append(items, u.items...)
+	u.items = append(items, name)
 	u.app.Preferences().SetStringList(prefItems, u.items)
 	u.list.Refresh()
 	u.appendLog(name + " 추가됨")
 }
 
 func (u *ui) removeItem(name string) {
-	kept := u.items[:0]
+	kept := make([]string, 0, len(u.items)) // 공유 배열 제자리 수정 금지 (데이터 레이스 방지)
 	for _, it := range u.items {
 		if it != name {
 			kept = append(kept, it)
@@ -211,17 +232,47 @@ func (u *ui) restartIfRunning() {
 
 func (u *ui) showSettings(startAfterSave bool) {
 	keyEntry := widget.NewPasswordEntry()
-	if _, err := keyring.Get(keyringService, keyringUser); err == nil {
+	_, keyErr := keyring.Get(keyringService, keyringUser)
+	hasKey := keyErr == nil
+	if hasKey {
 		keyEntry.PlaceHolder = "(저장됨 — 변경할 때만 입력)"
 	}
 	intervalEntry := widget.NewEntry()
 	intervalEntry.SetText(strconv.Itoa(u.app.Preferences().IntWithFallback(prefInterval, defaultInterval)))
+	// Validator가 저장 버튼을 막는다 — 폼 다이얼로그는 콜백 전에 닫히므로 사후 검증으로는 늦다
+	intervalEntry.Validator = func(s string) error {
+		n, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil || n < 1 {
+			return errors.New("1 이상의 정수를 입력해주세요")
+		}
+		return nil
+	}
 
-	d := dialog.NewForm("설정", "저장", "취소", []*widget.FormItem{
+	formItems := []*widget.FormItem{
 		widget.NewFormItem("넥슨 API 키", keyEntry),
 		widget.NewFormItem("폴링 주기(초)", intervalEntry),
-	}, func(ok bool) {
+	}
+	var deleteCheck *widget.Check
+	if hasKey {
+		deleteCheck = widget.NewCheck("저장된 API 키 삭제", nil)
+		formItems = append(formItems, widget.NewFormItem("", deleteCheck))
+	}
+
+	d := dialog.NewForm("설정", "저장", "취소", formItems, func(ok bool) {
 		if !ok {
+			return
+		}
+		if n, err := strconv.Atoi(strings.TrimSpace(intervalEntry.Text)); err == nil && n >= 1 {
+			u.app.Preferences().SetInt(prefInterval, n)
+		}
+		if deleteCheck != nil && deleteCheck.Checked {
+			if err := keyring.Delete(keyringService, keyringUser); err != nil {
+				dialog.ShowError(errors.New("키 삭제 실패: "+err.Error()), u.win)
+				return
+			}
+			u.stopMonitoring()
+			u.status.SetText(statusNoKey)
+			u.appendLog("API 키 삭제됨")
 			return
 		}
 		if v := strings.TrimSpace(keyEntry.Text); v != "" {
@@ -231,12 +282,6 @@ func (u *ui) showSettings(startAfterSave bool) {
 			}
 			u.appendLog("API 키 저장됨 (Windows 자격 증명 관리자)")
 		}
-		n, err := strconv.Atoi(strings.TrimSpace(intervalEntry.Text))
-		if err != nil || n < 1 {
-			dialog.ShowError(errors.New("폴링 주기는 1 이상의 정수여야 합니다"), u.win)
-			return
-		}
-		u.app.Preferences().SetInt(prefInterval, n)
 		if startAfterSave && u.cancel == nil {
 			u.startMonitoring()
 		} else {

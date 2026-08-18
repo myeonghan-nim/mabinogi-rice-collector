@@ -87,7 +87,7 @@ Fyne Preferences (`app.NewWithID("com.github.myeonghan-nim.mabinogi-rice-collect
 
 1. `windows-2025` 러너 (gcc 사전 설치 → cgo/Fyne 빌드 무설정), `concurrency: release`, `permissions: contents: write`
 2. checkout (`fetch-depth: 0`) → setup-go → `go test ./...`
-3. mathieudutour/github-tag-action@v6.2, `default_bump: false` — conventional commit(`feat:`→minor, `fix:`→patch, `feat!:`/`BREAKING CHANGE`→major)일 때만 태그
+3. mathieudutour/github-tag-action@v6.2, `default_bump: false` — conventional commit(`feat:`→minor, `fix:`→patch, 본문 `BREAKING CHANGE:` 푸터→major)일 때만 태그. 이 액션의 angular preset은 `feat!:`의 `!` 표기를 파싱하지 못하므로 major는 반드시 푸터로 표기
 4. `if: steps.tag.outputs.new_tag != ''` 가드 하에: `go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=${{ steps.tag.outputs.new_version }}"` → SHA-256 체크섬 생성 → action-gh-release로 exe + 체크섬 첨부, 본문은 태그 액션의 changelog 출력
 
 `ci.yml`은 pull_request에서 테스트+빌드만 수행(릴리스 파이프라인의 상시 리허설). dependabot은 `chore` prefix라 릴리스를 만들지 않는다.
